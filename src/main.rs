@@ -33,7 +33,7 @@ enum FileType {
 }
 
 impl FileType {
-    fn from(metadata: fs::Metadata) -> FileType {
+    fn from(metadata: &fs::Metadata) -> FileType {
         if metadata.is_dir() {
             FileType::Dir
         } else if metadata.is_symlink() {
@@ -51,17 +51,28 @@ impl FileType {
 struct FileInfo {
     name: String,
     r#type: FileType,
+    info: String,
 }
 
-fn read_dir(path: &str, show_hidden: bool) -> Result<Vec<ListItem>, std::io::Error> {
+fn to_kb(bytes: u64) -> f32 {
+    bytes as f32 / 1024_f32
+}
+
+fn read_dir(path: &str, show_hidden: bool) -> Result<Vec<Row>, std::io::Error> {
     let dir = fs::read_dir(std::path::Path::new(path))?;
 
     let (mut dirs, mut files): (Vec<_>, Vec<_>) = dir
         .map(|dir| -> FileInfo {
             let dir = dir.unwrap();
+            let metadata = dir.metadata().unwrap();
             let name = dir.file_name().into_string().unwrap();
-            let r#type = FileType::from(dir.metadata().unwrap());
-            FileInfo { name, r#type }
+            let r#type = FileType::from(&metadata);
+            let info = match r#type {
+                FileType::Dir => "<DIR>".to_string(),
+                FileType::File | FileType::Link => format!("{:.1} K", to_kb(metadata.len())),
+                // FileType::Link => format!("-> {}", to_kb(metadata.len())),
+            };
+            FileInfo { name, r#type, info }
         })
         .filter(|dir| show_hidden || dir.name.chars().nth(0).unwrap() != '.')
         .partition(|dir| dir.r#type == FileType::Dir);
@@ -74,7 +85,7 @@ fn read_dir(path: &str, show_hidden: bool) -> Result<Vec<ListItem>, std::io::Err
     let list = dirs
         .iter()
         .map(|info| {
-            ListItem::new::<String>(info.name.clone())
+            Row::new(vec![info.name.clone(), info.info.clone()])
                 .style(*FILE_STYLES.get(&info.r#type).unwrap())
         })
         .collect();
@@ -100,13 +111,15 @@ fn main() -> Result<(), io::Error> {
         // -- draw
         let style_selection = Style::default().fg(Color::Black).bg(Color::LightYellow);
 
-        let mut state = ListState::default();
+        let mut state = TableState::default();
         state.select(Some(selected_index));
 
+        use tui::layout::Constraint;
         terminal.draw(|f| {
             let size = f.size();
-            let list = List::new(file_list.clone())
+            let list = Table::new(file_list.clone())
                 .block(Block::default().borders(Borders::ALL))
+                .widths(&[Constraint::Length(50), Constraint::Length(10)])
                 .highlight_style(style_selection);
             f.render_stateful_widget(list, size, &mut state);
         })?;
