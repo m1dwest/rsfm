@@ -1,96 +1,26 @@
 use tui::style::*;
 use tui::widgets::*;
 
-use std::{fs, io};
+use std::io;
 
-mod actions;
+mod ui;
 
-lazy_static::lazy_static! {
-    static ref FILE_STYLES: std::collections::HashMap<FileType, Style> = {
-        let mut map = std::collections::HashMap::new();
-        map.insert(FileType::File, Style::default());
-        map.insert(FileType::Dir, Style::default().fg(Color::Red).add_modifier(Modifier::BOLD));
-        map.insert(FileType::Link, Style::default().fg(Color::Green).add_modifier(Modifier::ITALIC));
-        map
-    };
-}
-
-lazy_static::lazy_static! {
-    static ref FILE_PRIORITY: std::collections::HashMap<FileType, u8> = {
-        let mut map = std::collections::HashMap::new();
-        map.insert(FileType::Dir, 0);
-        map.insert(FileType::File, 1);
-        map.insert(FileType::Link, 1);
-        map
-    };
-}
-
-#[derive(Debug, PartialEq, Eq, Hash)]
-enum FileType {
-    File,
-    Dir,
-    Link,
-}
-
-impl FileType {
-    fn from(metadata: &fs::Metadata) -> FileType {
-        if metadata.is_dir() {
-            FileType::Dir
-        } else if metadata.is_symlink() {
-            FileType::Link
-        } else {
-            FileType::File
+fn get_dir_entries(path: &std::path::Path) -> Vec<std::fs::DirEntry> {
+    match std::fs::read_dir(path) {
+        Ok(entries) => entries
+            .filter_map(|result| match result {
+                Ok(entry) => Some(entry),
+                Err(error) => {
+                    eprintln!("{error}");
+                    None
+                }
+            })
+            .collect(),
+        Err(error) => {
+            eprintln!("{error}");
+            Vec::new()
         }
     }
-
-    // fn priority(&self) -> u8 {
-    //     *FILE_PRIORITY.get(self).unwrap()
-    // }
-}
-
-struct FileInfo {
-    name: String,
-    r#type: FileType,
-    info: String,
-}
-
-fn to_kb(bytes: u64) -> f32 {
-    bytes as f32 / 1024_f32
-}
-
-fn read_dir(path: &str, show_hidden: bool) -> Result<Vec<Row>, std::io::Error> {
-    let dir = fs::read_dir(std::path::Path::new(path))?;
-
-    let (mut dirs, mut files): (Vec<_>, Vec<_>) = dir
-        .map(|dir| -> FileInfo {
-            let dir = dir.unwrap();
-            let metadata = dir.metadata().unwrap();
-            let name = dir.file_name().into_string().unwrap();
-            let r#type = FileType::from(&metadata);
-            let info = match r#type {
-                FileType::Dir => "<DIR>".to_string(),
-                FileType::File | FileType::Link => format!("{:.1} K", to_kb(metadata.len())),
-                // FileType::Link => format!("-> {}", to_kb(metadata.len())),
-            };
-            FileInfo { name, r#type, info }
-        })
-        .filter(|dir| show_hidden || dir.name.chars().nth(0).unwrap() != '.')
-        .partition(|dir| dir.r#type == FileType::Dir);
-
-    dirs.sort_by(|a, b| a.name.cmp(&b.name));
-    files.sort_by(|a, b| a.name.cmp(&b.name));
-
-    dirs.append(&mut files);
-
-    let list = dirs
-        .iter()
-        .map(|info| {
-            Row::new(vec![info.name.clone(), info.info.clone()])
-                .style(*FILE_STYLES.get(&info.r#type).unwrap())
-        })
-        .collect();
-
-    Ok(list)
 }
 
 fn main() -> Result<(), io::Error> {
@@ -104,9 +34,11 @@ fn main() -> Result<(), io::Error> {
     crossterm::terminal::enable_raw_mode()?;
 
     let mut selected_index = 0;
-    let mut show_hidden = false;
 
-    let mut file_list = read_dir("/home/midwest", show_hidden).unwrap();
+    let mut opt = ui::ViewOptions { show_hidden: true };
+    let cwd = std::path::Path::new("/home/midwest");
+    let mut dir_entries = get_dir_entries(&cwd);
+
     loop {
         // -- draw
         let style_selection = Style::default().fg(Color::Black).bg(Color::LightYellow);
@@ -117,7 +49,8 @@ fn main() -> Result<(), io::Error> {
         use tui::layout::Constraint;
         terminal.draw(|f| {
             let size = f.size();
-            let list = Table::new(file_list.clone())
+            let rows = ui::get_table_rows(&dir_entries, &opt);
+            let list = Table::new(rows)
                 .block(Block::default().borders(Borders::ALL))
                 .widths(&[Constraint::Length(50), Constraint::Length(10)])
                 .highlight_style(style_selection);
@@ -135,9 +68,14 @@ fn main() -> Result<(), io::Error> {
                         selected_index -= 1
                     }
                 }
+                // KeyCode::Char('l') => {
+                //     if let Some(index) = state.selected() {
+                //         let name = descs[index].name;
+                //     }
+                // }
                 KeyCode::Char('h') => {
-                    show_hidden ^= true;
-                    file_list = read_dir("/home/midwest", show_hidden).unwrap();
+                    opt.show_hidden ^= true;
+                    dir_entries = get_dir_entries(&cwd);
                 }
                 _ => {}
             },
