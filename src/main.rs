@@ -35,7 +35,7 @@ fn main() -> Result<(), io::Error> {
 
     let mut selected_index = 0;
 
-    let mut opt = ui::ViewOptions { show_hidden: true };
+    let mut opt = ui::ViewOptions { show_hidden: false };
     let cwd = std::path::Path::new("/home/midwest");
     let mut dir_entries = get_dir_entries(&cwd);
 
