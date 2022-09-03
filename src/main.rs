@@ -3,7 +3,7 @@ use tui::widgets::*;
 
 use std::io;
 
-mod ui;
+mod model;
 
 fn get_dir_entries(path: &std::path::Path) -> Vec<std::fs::DirEntry> {
     match std::fs::read_dir(path) {
@@ -35,7 +35,11 @@ fn main() -> Result<(), io::Error> {
 
     let mut selected_index = 0;
 
-    let mut opt = ui::ViewOptions { show_hidden: false };
+    let mut opt = model::ViewOptions {
+        show_hidden: false,
+        left_column_witdh: 50,
+        right_column_width: 10,
+    };
     let cwd = std::path::Path::new("/home/midwest");
     let mut dir_entries = get_dir_entries(&cwd);
 
@@ -49,10 +53,14 @@ fn main() -> Result<(), io::Error> {
         use tui::layout::Constraint;
         terminal.draw(|f| {
             let size = f.size();
-            let rows = ui::get_table_rows(&dir_entries, &opt);
+            let rows = model::get_table_rows(&dir_entries, &opt);
+            let widths = &[
+                Constraint::Length(opt.left_column_witdh),
+                Constraint::Length(opt.right_column_width),
+            ];
             let list = Table::new(rows)
                 .block(Block::default().borders(Borders::ALL))
-                .widths(&[Constraint::Length(50), Constraint::Length(10)])
+                .widths(widths)
                 .highlight_style(style_selection);
             f.render_stateful_widget(list, size, &mut state);
         })?;

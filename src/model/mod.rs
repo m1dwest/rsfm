@@ -3,6 +3,8 @@ use tui::widgets::*;
 
 use std::collections::HashMap;
 
+mod details;
+
 lazy_static::lazy_static! {
     static ref FILE_STYLES: HashMap<EntryType, Style> = {
         let mut map = HashMap::new();
@@ -27,6 +29,8 @@ lazy_static::lazy_static! {
 
 pub struct ViewOptions {
     pub show_hidden: bool,
+    pub left_column_witdh: u16,
+    pub right_column_width: u16,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -52,11 +56,20 @@ impl EntryType {
 }
 
 fn get_info_string(metadata: &std::fs::Metadata) -> String {
-    "".to_string()
+    if metadata.is_dir() {
+        return "<DIR>".to_string();
+    } else if metadata.is_file() {
+        let (size, postfix) = details::human_readable_size(metadata.len());
+        return format!("{} {}", size, postfix);
+    } else if metadata.is_symlink() {
+        return "->".to_string();
+    } else {
+        return "<???>".to_string();
+    }
 }
 
-fn parse_metadata(metadata: &Option<std::fs::Metadata>) -> (String, Style) {
-    match metadata {
+fn parse_metadata(metadata: &Option<std::fs::Metadata>, string_width: u16) -> (String, Style) {
+    let (string, style) = match metadata {
         Some(metadata) => {
             let entry_type = EntryType::new(metadata);
             (
@@ -68,7 +81,12 @@ fn parse_metadata(metadata: &Option<std::fs::Metadata>) -> (String, Style) {
             "<???>".to_string(),
             *FILE_STYLES.get(&EntryType::Unknown).unwrap(),
         ),
-    }
+    };
+
+    (
+        " ".repeat(string_width as usize - string.len()) + &string,
+        style,
+    )
 }
 
 #[derive(Debug, Clone)]
@@ -162,10 +180,8 @@ pub fn get_table_rows<'a>(entries: &'a Vec<std::fs::DirEntry>, opt: &ViewOptions
     items_parts.into_iter().for_each(|part| {
         let slice = &mut items[part.begin..part.end];
         slice.sort_by(|a, b| {
-            let a_char = a.name.chars().nth(0).unwrap_or(' ');
-            let b_char = b.name.chars().nth(0).unwrap_or(' ');
-            a_char
-                .partial_cmp(&b_char)
+            a.name
+                .partial_cmp(&b.name)
                 .unwrap_or(std::cmp::Ordering::Less)
         });
     });
@@ -173,7 +189,7 @@ pub fn get_table_rows<'a>(entries: &'a Vec<std::fs::DirEntry>, opt: &ViewOptions
     items
         .into_iter()
         .map(|item| {
-            let (info, style) = parse_metadata(&item.metadata);
+            let (info, style) = parse_metadata(&item.metadata, opt.right_column_width);
             Row::new(vec![item.name, info]).style(style)
         })
         .collect()
