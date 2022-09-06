@@ -3,6 +3,7 @@ use tui::widgets::*;
 
 use std::io;
 
+mod config;
 mod model;
 
 fn get_dir_entries(path: &std::path::Path) -> Vec<std::fs::DirEntry> {
@@ -24,6 +25,7 @@ fn get_dir_entries(path: &std::path::Path) -> Vec<std::fs::DirEntry> {
 }
 
 fn main() -> Result<(), io::Error> {
+    let mut options = config::read_config(std::path::Path::new("config.lua"));
     let stdout = io::stdout();
     let backend = tui::backend::CrosstermBackend::new(stdout);
     let mut terminal = tui::terminal::Terminal::new(backend)?;
@@ -35,11 +37,6 @@ fn main() -> Result<(), io::Error> {
 
     let mut selected_index = 0;
 
-    let mut opt = model::ViewOptions {
-        show_hidden: false,
-        left_column_witdh: 50,
-        right_column_width: 10,
-    };
     let cwd = std::path::Path::new("/home/midwest");
     let mut dir_entries = get_dir_entries(&cwd);
 
@@ -53,10 +50,10 @@ fn main() -> Result<(), io::Error> {
         use tui::layout::Constraint;
         terminal.draw(|f| {
             let size = f.size();
-            let rows = model::get_table_rows(&dir_entries, &opt);
+            let rows = model::get_table_rows(&dir_entries, &options);
             let widths = &[
-                Constraint::Length(opt.left_column_witdh),
-                Constraint::Length(opt.right_column_width),
+                Constraint::Length(options.left_column_witdh),
+                Constraint::Length(options.right_column_width),
             ];
             let list = Table::new(rows)
                 .block(Block::default().borders(Borders::ALL))
@@ -82,7 +79,7 @@ fn main() -> Result<(), io::Error> {
                 //     }
                 // }
                 KeyCode::Char('h') => {
-                    opt.show_hidden ^= true;
+                    options.show_hidden ^= true;
                     dir_entries = get_dir_entries(&cwd);
                 }
                 _ => {}

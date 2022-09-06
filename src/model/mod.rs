@@ -33,6 +33,16 @@ pub struct ViewOptions {
     pub right_column_width: u16,
 }
 
+impl ViewOptions {
+    pub fn default() -> ViewOptions {
+        ViewOptions {
+            show_hidden: false,
+            left_column_witdh: 50,
+            right_column_width: 10,
+        }
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 enum EntryType {
     Dir,
