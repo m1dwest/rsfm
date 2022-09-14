@@ -52,8 +52,8 @@ fn main() -> Result<(), io::Error> {
             let size = f.size();
             let rows = model::get_table_rows(&dir_entries, &options);
             let widths = &[
-                Constraint::Length(options.left_column_witdh),
-                Constraint::Length(options.right_column_width),
+                Constraint::Length(options.column_left_width),
+                Constraint::Length(options.column_right_width),
             ];
             let list = Table::new(rows)
                 .block(Block::default().borders(Borders::ALL))

@@ -29,16 +29,16 @@ lazy_static::lazy_static! {
 
 pub struct ViewOptions {
     pub show_hidden: bool,
-    pub left_column_witdh: u16,
-    pub right_column_width: u16,
+    pub column_left_width: u16,
+    pub column_right_width: u16,
 }
 
 impl ViewOptions {
     pub fn default() -> ViewOptions {
         ViewOptions {
             show_hidden: false,
-            left_column_witdh: 50,
-            right_column_width: 10,
+            column_left_width: 50,
+            column_right_width: 10,
         }
     }
 }
@@ -199,7 +199,7 @@ pub fn get_table_rows<'a>(entries: &'a Vec<std::fs::DirEntry>, opt: &ViewOptions
     items
         .into_iter()
         .map(|item| {
-            let (info, style) = parse_metadata(&item.metadata, opt.right_column_width);
+            let (info, style) = parse_metadata(&item.metadata, opt.column_right_width);
             Row::new(vec![item.name, info]).style(style)
         })
         .collect()
