@@ -1,9 +1,7 @@
 static VARIABLES: phf::Map<&'static str, &'static str> = phf::phf_map! {
     "rsfm.show_hidden" => "boolean",
-    "rsfm.column_left" => "table",
-    "rsfm.column_left.width" => "integer",
-    "rsfm.column_right" => "table",
-    "rsfm.column_right.width" => "integer",
+    "rsfm.entry_format" => "table",
+    "rsfm.entry_format._" => "string", // array, matches 1, 2, 3...
 };
 
 const MAX_DISTANCE: usize = 3;
@@ -34,12 +32,15 @@ fn parse_var_tree(path: &str, value: rlua::Value, vector: &mut Vec<VarDesc>) {
     }
 }
 
-fn find_similar_var(target_name: &str, max_distance: usize) -> Option<&str> {
+fn find_similar<'a, T>(target: &'a str, src_list: T, max_distance: usize) -> Option<&str>
+where
+    T: Iterator<Item = &'a &'a str>,
+{
     let mut distance = max_distance + 1;
     let mut similar = "";
 
-    for expected_name in VARIABLES.keys() {
-        let current_distance = levenshtein::levenshtein(&expected_name, target_name);
+    for expected_name in src_list {
+        let current_distance = levenshtein::levenshtein(&expected_name, target);
         if current_distance < distance {
             distance = current_distance;
             similar = expected_name;
@@ -71,6 +72,24 @@ impl SyntaxError {
     }
 }
 
+fn matches_array(var: &VarDesc) -> bool {
+    let (table, inner) = match var.hierarchy_name.rsplit_once('.') {
+        Some(tuple) => tuple,
+        None => return false,
+    };
+
+    let table_type = VARIABLES.get(&table);
+
+    if table_type.is_none() || (*table_type.unwrap()).ne("table") || inner.parse::<u16>().is_err() {
+        false
+    } else {
+        match VARIABLES.get(&(table.to_owned() + "._")) {
+            Some(inner_type) => (*inner_type).eq(var.type_name),
+            None => false,
+        }
+    }
+}
+
 pub fn check(root_key: &str, root_value: rlua::Value) -> Result<(), SyntaxError> {
     let mut actual_vars: Vec<VarDesc> = Vec::new();
     parse_var_tree(root_key, root_value, &mut actual_vars);
@@ -90,7 +109,11 @@ pub fn check(root_key: &str, root_value: rlua::Value) -> Result<(), SyntaxError>
                 }
             }
             None => {
-                let what = match find_similar_var(&var.hierarchy_name, MAX_DISTANCE) {
+                if matches_array(&var) {
+                    return;
+                }
+
+                let what = match find_similar(&var.hierarchy_name, VARIABLES.keys(), MAX_DISTANCE) {
                     Some(similar) => {
                         format!(
                             "Unknown variable '{}'. Did you mean '{}'?",
@@ -114,4 +137,8 @@ pub fn check(root_key: &str, root_value: rlua::Value) -> Result<(), SyntaxError>
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+
+    #[test]
+    fn find_similar() {}
+}

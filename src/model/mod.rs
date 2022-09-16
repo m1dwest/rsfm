@@ -3,6 +3,7 @@ use tui::widgets::*;
 
 use std::collections::HashMap;
 
+use crate::config;
 mod details;
 
 lazy_static::lazy_static! {
@@ -25,22 +26,6 @@ lazy_static::lazy_static! {
         map.insert(EntryType::Unknown, 0);
         map
     };
-}
-
-pub struct ViewOptions {
-    pub show_hidden: bool,
-    pub column_left_width: u16,
-    pub column_right_width: u16,
-}
-
-impl ViewOptions {
-    pub fn default() -> ViewOptions {
-        ViewOptions {
-            show_hidden: false,
-            column_left_width: 50,
-            column_right_width: 10,
-        }
-    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -141,7 +126,10 @@ fn split_into_parts(items: &Vec<Item>) -> Vec<Part> {
     result
 }
 
-pub fn get_table_rows<'a>(entries: &'a Vec<std::fs::DirEntry>, opt: &ViewOptions) -> Vec<Row<'a>> {
+pub fn get_table_rows<'a>(
+    entries: &'a Vec<std::fs::DirEntry>,
+    opt: &config::ViewOptions,
+) -> Vec<Row<'a>> {
     let items: Vec<_> = entries
         .iter()
         .map(|entry| {
