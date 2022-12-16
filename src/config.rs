@@ -1,5 +1,5 @@
 mod parser;
-mod syntax;
+pub mod syntax;
 
 #[derive(Debug)]
 pub enum MetadataFormat {
@@ -54,7 +54,7 @@ pub fn read_config(path: &std::path::Path) -> ViewOptions {
         Ok(config_source) => {
             let lua = rlua::Lua::new();
 
-            match lua.context(|ctx| {
+            match lua.context(|ctx| -> Result<(), rlua::Error> {
                 let rsfm = ctx.create_table()?;
                 let globals = ctx.globals();
 
@@ -64,16 +64,17 @@ pub fn read_config(path: &std::path::Path) -> ViewOptions {
 
                 let rsfm = globals.get::<_, rlua::Value>("rsfm")?;
 
-                if let Err(error) = syntax::check("rsfm", rsfm.clone()) {
+                // TODO check -> parse_tree
+                if let Err(errors) = syntax::check("rsfm", rsfm.clone()) {
                     eprintln!("Configuration syntax error: ");
-                    for e in error.errors() {
+                    for e in errors {
                         eprintln!("{e}");
                     }
                 };
 
                 result = parser::parse(rsfm)?;
 
-                Ok::<(), rlua::Error>(())
+                Ok(())
             }) {
                 Ok(()) => result,
                 Err(error) => {

@@ -1,13 +1,13 @@
 static VARIABLES: phf::Map<&'static str, &'static str> = phf::phf_map! {
     "rsfm.show_hidden" => "boolean",
     "rsfm.entry_format" => "table",
-    "rsfm.entry_format._" => "string", // array, matches 1, 2, 3...
+    "rsfm.entry_format{}" => "string", // array, matches 1, 2, 3...
 };
 
 const MAX_SIMILARITY_DISTANCE: usize = 3;
 
 #[derive(Debug)]
-struct VarDesc {
+pub struct VarDesc {
     hierarchy_name: String,
     type_name: &'static str,
 }
@@ -32,7 +32,6 @@ fn parse_tree_impl(path: &str, value: rlua::Value, vector: &mut Vec<VarDesc>) {
                 }
                 Err(error) => {
                     eprintln!("error parsing config.lua: {}", error);
-                    continue;
                 }
             }
         }
@@ -61,24 +60,6 @@ where
     };
 }
 
-pub struct SyntaxError {
-    errors: Vec<String>,
-}
-
-impl SyntaxError {
-    fn new() -> SyntaxError {
-        SyntaxError { errors: Vec::new() }
-    }
-
-    pub fn errors(self) -> Vec<String> {
-        self.errors
-    }
-
-    pub fn has_error(&self) -> bool {
-        !self.errors.is_empty()
-    }
-}
-
 fn matches_array(var: &VarDesc) -> bool {
     let (table, inner) = match var.hierarchy_name.rsplit_once('.') {
         Some(tuple) => tuple,
@@ -90,28 +71,40 @@ fn matches_array(var: &VarDesc) -> bool {
     if table_type.is_none() || (*table_type.unwrap()).ne("table") || inner.parse::<u16>().is_err() {
         false
     } else {
-        match VARIABLES.get(&(table.to_owned() + "._")) {
+        match VARIABLES.get(&(table.to_owned() + "{}")) {
             Some(inner_type) => (*inner_type).eq(var.type_name),
             None => false,
         }
     }
 }
 
-pub fn check(root_key: &str, root_value: rlua::Value) -> Result<(), SyntaxError> {
+pub type CheckResult = Result<Vec<VarDesc>, Vec<String>>;
+
+pub fn check(root_key: &str, root_value: rlua::Value) -> CheckResult {
     let actual_vars = parse_tree(root_key, root_value);
 
-    let mut error = SyntaxError::new();
+    let mut errors = Vec::new();
+    let mut skip_hierarchies: Vec<&str> = Vec::new();
 
-    actual_vars
-        .into_iter()
-        .for_each(|var| match VARIABLES.get(&var.hierarchy_name) {
+    actual_vars.iter().for_each(|var| {
+        // skip checking underlying table entries if 'table' is unexpected type
+        if skip_hierarchies
+            .iter()
+            .find(|&&x| var.hierarchy_name.starts_with(x))
+            .is_some()
+        {
+            return;
+        }
+
+        match VARIABLES.get(&var.hierarchy_name) {
             Some(expected_type_name) => {
                 if var.type_name.ne(*expected_type_name) {
                     let what = format!(
                         "Unexpected type '{}' for variable '{}', use '{}'",
                         var.type_name, var.hierarchy_name, expected_type_name
                     );
-                    error.errors.push(what);
+                    errors.push(what);
+                    skip_hierarchies.push(&var.hierarchy_name);
                 }
             }
             None => {
@@ -135,14 +128,15 @@ pub fn check(root_key: &str, root_value: rlua::Value) -> Result<(), SyntaxError>
                     }
                 };
 
-                error.errors.push(what);
+                errors.push(what);
             }
-        });
+        }
+    });
 
-    if error.has_error() {
-        Err(error)
+    if errors.is_empty() {
+        Ok(actual_vars)
     } else {
-        Ok(())
+        Err(errors)
     }
 }
 
