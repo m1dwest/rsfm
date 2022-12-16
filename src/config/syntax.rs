@@ -4,14 +4,21 @@ static VARIABLES: phf::Map<&'static str, &'static str> = phf::phf_map! {
     "rsfm.entry_format._" => "string", // array, matches 1, 2, 3...
 };
 
-const MAX_DISTANCE: usize = 3;
+const MAX_SIMILARITY_DISTANCE: usize = 3;
 
-struct VarDesc<'a> {
+#[derive(Debug)]
+struct VarDesc {
     hierarchy_name: String,
-    type_name: &'a str,
+    type_name: &'static str,
 }
 
-fn parse_var_tree(path: &str, value: rlua::Value, vector: &mut Vec<VarDesc>) {
+fn parse_tree(path: &str, value: rlua::Value) -> Vec<VarDesc> {
+    let mut actual_vars: Vec<VarDesc> = Vec::new();
+    parse_tree_impl(path, value, &mut actual_vars);
+    actual_vars
+}
+
+fn parse_tree_impl(path: &str, value: rlua::Value, vector: &mut Vec<VarDesc>) {
     if let rlua::Value::Table(table) = value {
         for pair in table.pairs::<String, rlua::Value>().into_iter() {
             match pair {
@@ -21,7 +28,7 @@ fn parse_var_tree(path: &str, value: rlua::Value, vector: &mut Vec<VarDesc>) {
                         hierarchy_name: path.clone(),
                         type_name: value.type_name(),
                     });
-                    parse_var_tree(&path, value, vector);
+                    parse_tree_impl(&path, value, vector);
                 }
                 Err(error) => {
                     eprintln!("error parsing config.lua: {}", error);
@@ -91,8 +98,7 @@ fn matches_array(var: &VarDesc) -> bool {
 }
 
 pub fn check(root_key: &str, root_value: rlua::Value) -> Result<(), SyntaxError> {
-    let mut actual_vars: Vec<VarDesc> = Vec::new();
-    parse_var_tree(root_key, root_value, &mut actual_vars);
+    let actual_vars = parse_tree(root_key, root_value);
 
     let mut error = SyntaxError::new();
 
@@ -113,7 +119,11 @@ pub fn check(root_key: &str, root_value: rlua::Value) -> Result<(), SyntaxError>
                     return;
                 }
 
-                let what = match find_similar(&var.hierarchy_name, VARIABLES.keys(), MAX_DISTANCE) {
+                let what = match find_similar(
+                    &var.hierarchy_name,
+                    VARIABLES.keys(),
+                    MAX_SIMILARITY_DISTANCE,
+                ) {
                     Some(similar) => {
                         format!(
                             "Unknown variable '{}'. Did you mean '{}'?",

@@ -48,18 +48,19 @@ impl ViewOptions {
 }
 
 pub fn read_config(path: &std::path::Path) -> ViewOptions {
-    let mut result_config = ViewOptions::default();
-
-    let lua = rlua::Lua::new();
+    let mut result = ViewOptions::default();
 
     match std::fs::read_to_string(path) {
-        Ok(code) => {
+        Ok(config_source) => {
+            let lua = rlua::Lua::new();
+
             match lua.context(|ctx| {
                 let rsfm = ctx.create_table()?;
                 let globals = ctx.globals();
 
                 globals.set("rsfm", rsfm)?;
-                ctx.load(&code).set_name("config")?.exec()?;
+
+                ctx.load(&config_source).set_name("config")?.exec()?;
 
                 let rsfm = globals.get::<_, rlua::Value>("rsfm")?;
 
@@ -70,20 +71,20 @@ pub fn read_config(path: &std::path::Path) -> ViewOptions {
                     }
                 };
 
-                result_config = parser::parse(rsfm)?;
+                result = parser::parse(rsfm)?;
 
                 Ok::<(), rlua::Error>(())
             }) {
-                Ok(()) => result_config,
+                Ok(()) => result,
                 Err(error) => {
                     eprintln!("Lua execution error: {error}");
-                    result_config
+                    result
                 }
             }
         }
         Err(error) => {
-            eprintln!("IO error: {error}");
-            result_config
+            eprintln!("Error reading configuration file: {error}");
+            result
         }
     }
 }
