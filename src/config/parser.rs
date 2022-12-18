@@ -3,7 +3,10 @@ use super::ViewOptions;
 static VARIABLES: phf::Map<&'static str, &'static str> = phf::phf_map! {
     "rsfm.show_hidden" => "boolean",
     "rsfm.entry_format" => "table",
-    "rsfm.entry_format{}" => "string", // array, matches 1, 2, 3...
+    "rsfm.entry_format.{}" => "table",
+    "rsfm.entry_format.{}.type" => "string",
+    "rsfm.entry_format.{}.size" => "integer",
+    "rsfm.entry_format.{}.is_fixed_size" => "boolean",
 };
 
 const MAX_SIMILARITY_DISTANCE: usize = 3;
@@ -62,22 +65,37 @@ where
     };
 }
 
-fn matches_array(var: &VarDesc) -> bool {
-    let (table, inner) = match var.name.rsplit_once('.') {
-        Some(tuple) => tuple,
-        None => return false,
-    };
+// fn matches_array(var: &VarDesc) -> bool {
+//     let (table, inner) = match var.name.rsplit_once('.') {
+//         Some(tuple) => tuple,
+//         None => return false,
+//     };
 
-    let table_type = VARIABLES.get(&table);
+//     let table_type = VARIABLES.get(&table);
 
-    if table_type.is_none() || (*table_type.unwrap()).ne("table") || inner.parse::<u16>().is_err() {
-        false
-    } else {
-        match VARIABLES.get(&(table.to_owned() + "{}")) {
-            Some(inner_type) => (*inner_type).eq(var.type_name),
-            None => false,
-        }
-    }
+//     if table_type.is_none() || (*table_type.unwrap()).ne("table") || inner.parse::<u16>().is_err() {
+//         false
+//     } else {
+//         match VARIABLES.get(&(table.to_owned() + "{}")) {
+//             Some(inner_type) => (*inner_type).eq(var.type_name),
+//             None => false,
+//         }
+//     }
+// }
+
+fn replace_array_index(var: &str) -> String {
+    use itertools::Itertools;
+
+    const SEPARATOR: &str = ".";
+    var.split(SEPARATOR)
+        .map(|var| {
+            if var.parse::<u16>().is_ok() {
+                "{}"
+            } else {
+                var
+            }
+        })
+        .join(SEPARATOR)
 }
 
 pub type CheckResult = Result<Vec<VarDesc>, Vec<String>>;
@@ -98,7 +116,8 @@ pub fn parse_syntax(root_key: &str, root_value: rlua::Value) -> CheckResult {
             return;
         }
 
-        match VARIABLES.get(&var.name) {
+        let no_arr_index = replace_array_index(&var.name);
+        match VARIABLES.get(&no_arr_index) {
             Some(expected_type_name) => {
                 if var.type_name.ne(*expected_type_name) {
                     let what = format!(
@@ -110,22 +129,18 @@ pub fn parse_syntax(root_key: &str, root_value: rlua::Value) -> CheckResult {
                 }
             }
             None => {
-                if matches_array(&var) {
-                    return;
-                }
-
-                let what = match find_similar(&var.name, VARIABLES.keys(), MAX_SIMILARITY_DISTANCE)
-                {
-                    Some(similar) => {
-                        format!(
-                            "Unknown variable '{}'. Did you mean '{}'?",
-                            var.name, similar
-                        )
-                    }
-                    None => {
-                        format!("Unknown variable '{}'", var.name)
-                    }
-                };
+                let what =
+                    match find_similar(&no_arr_index, VARIABLES.keys(), MAX_SIMILARITY_DISTANCE) {
+                        Some(similar) => {
+                            format!(
+                                "Unknown variable '{}'. Did you mean '{}'?",
+                                no_arr_index, similar
+                            )
+                        }
+                        None => {
+                            format!("Unknown variable '{}'", no_arr_index)
+                        }
+                    };
 
                 errors.push(what);
             }
@@ -197,5 +212,8 @@ pub fn parse_values(root: rlua::Value) -> Result<ViewOptions, rlua::Error> {
 mod tests {
 
     #[test]
-    fn find_similar() {}
+    fn replace_array_index() {
+        let actual = super::replace_array_index("root.var1.1.var2.2");
+        assert_eq!(actual, "root.var1.{}.var2.{}");
+    }
 }

@@ -21,7 +21,16 @@ fn correct() {
 
     rsfm.show_hidden = false
     rsfm.entry_format = {
-        "first:1", "second:2", "third:3"
+        {
+            type = "name",
+            size = 5,
+            is_fixed_size = false,
+        },
+        {
+            type = "size",
+            size = 5,
+            is_fixed_size = true,
+        }
     }
     "#;
 
@@ -43,7 +52,11 @@ fn unexpected_type() {
     rsfm.show_hidden = {
         x = 3
     }
-    rsfm.entry_format = 3
+    rsfm.entry_format = {
+        {
+            type = false
+        }
+    }
     "#;
 
     let result = check(&config);
@@ -60,7 +73,7 @@ fn unexpected_type() {
     assert!(result
         .iter()
         .find(|&e| {
-            e.eq("Unexpected type 'integer' for variable 'rsfm.entry_format', use 'table'")
+            e.eq("Unexpected type 'boolean' for variable 'rsfm.entry_format.1.type', use 'string'")
         })
         .is_some(),);
 }
@@ -70,6 +83,9 @@ fn unknown_variable() {
     let config = r#"
     rsfm.show_hidxxx = true
     rsfm.show_hixxxx = true
+    rsfm.show_hidden = {
+        false
+    }
     rsfm.entry_format = {
         x = 3
     }
@@ -80,7 +96,8 @@ fn unknown_variable() {
     assert!(result.is_err());
 
     let result = result.unwrap_err();
-    assert_eq!(result.len(), 4);
+    println!("{:?}", result);
+    assert_eq!(result.len(), 5);
     assert!(result
         .iter()
         .find(|&e| { e.eq("Unknown variable 'rsfm.show_hixxxx'") })
@@ -94,11 +111,56 @@ fn unknown_variable() {
     assert!(result
         .iter()
         .find(|&e| {
-            e.eq("Unknown variable 'rsfm.entry_format.x'. Did you mean 'rsfm.entry_format{}'?")
+            e.eq("Unexpected type 'table' for variable 'rsfm.show_hidden', use 'boolean'")
+        })
+        .is_some(),);
+    assert!(result
+        .iter()
+        .find(|&e| {
+            e.eq("Unknown variable 'rsfm.entry_format.x'. Did you mean 'rsfm.entry_format.{}'?")
         })
         .is_some(),);
     assert!(result
         .iter()
         .find(|&e| { e.eq("Unknown variable 'rsfm.var'") })
         .is_some(),);
+}
+
+#[test]
+fn unknown_variable_in_table_1() {
+    let config = r#"
+    rsfm.entry_format = {
+        {
+            x = 3
+        }
+    }
+    "#;
+
+    let result = check(&config);
+    assert!(result.is_err());
+
+    let result = result.unwrap_err();
+    assert_eq!(result.len(), 1);
+    assert_eq!(
+        result[0],
+        "Unknown variable 'rsfm.entry_format.{}.x'. Did you mean 'rsfm.entry_format.{}'?"
+    );
+
+    let config = r#"
+    rsfm.entry_format = {
+        {
+            hype = 3
+        }
+    }
+    "#;
+
+    let result = check(&config);
+    assert!(result.is_err());
+
+    let result = result.unwrap_err();
+    assert_eq!(result.len(), 1);
+    assert_eq!(
+        result[0],
+        "Unknown variable 'rsfm.entry_format.{}.hype'. Did you mean 'rsfm.entry_format.{}.type'?"
+    );
 }

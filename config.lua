@@ -1,4 +1,13 @@
 rsfm.show_hidden = false
 rsfm.entry_format = {
-    "name:5", "size:5f"
+    {
+        type = "name",
+        size = 5,
+        is_fixed_size = false,
+    },
+    {
+        type = "size",
+        size = 5,
+        is_fixed_size = true,
+    }
 }
