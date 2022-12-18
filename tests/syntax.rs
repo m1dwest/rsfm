@@ -1,4 +1,4 @@
-use rsfm::syntax::CheckResult;
+use rsfm::parser::CheckResult;
 
 fn check(source: &str) -> CheckResult {
     rlua::Lua::new().context(|ctx| -> CheckResult {
@@ -10,7 +10,7 @@ fn check(source: &str) -> CheckResult {
         ctx.load(source).exec().unwrap();
 
         let rsfm = globals.get::<_, rlua::Value>("rsfm").unwrap();
-        rsfm::syntax::check("rsfm", rsfm)
+        rsfm::parser::parse_syntax("rsfm", rsfm)
     })
 }
 

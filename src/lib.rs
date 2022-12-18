@@ -1,13 +1,13 @@
 use tui::style::*;
 use tui::widgets::*;
 
-use std::{fmt, io};
+use std::io;
 
 mod config;
 mod model;
 
 // TODO
-pub use config::syntax;
+pub use config::parser;
 
 fn get_dir_entries(path: &std::path::Path) -> Vec<std::fs::DirEntry> {
     match std::fs::read_dir(path) {

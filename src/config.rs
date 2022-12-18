@@ -1,5 +1,4 @@
-mod parser;
-pub mod syntax;
+pub mod parser;
 
 #[derive(Debug)]
 pub enum MetadataFormat {
@@ -65,14 +64,14 @@ pub fn read_config(path: &std::path::Path) -> ViewOptions {
                 let rsfm = globals.get::<_, rlua::Value>("rsfm")?;
 
                 // TODO check -> parse_tree
-                if let Err(errors) = syntax::check("rsfm", rsfm.clone()) {
+                if let Err(errors) = parser::parse_syntax("rsfm", rsfm.clone()) {
                     eprintln!("Configuration syntax error: ");
                     for e in errors {
                         eprintln!("{e}");
                     }
                 };
 
-                result = parser::parse(rsfm)?;
+                result = parser::parse_values(rsfm)?;
 
                 Ok(())
             }) {
