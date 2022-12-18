@@ -149,7 +149,7 @@ fn parse_root(table: rlua::Table) -> ViewOptions {
     if let Ok(entry_format) = table.get::<_, rlua::Table>("entry_format") {
         let re = regex::Regex::new(r"^(?P<name>\w+)(?::(?P<size>\d+)(?P<is_fixed>\w)?)?$").unwrap();
 
-        options.entry_format = entry_format
+        options.columns = entry_format
             .pairs()
             .filter_map(|result: Result<(u16, String), rlua::Error>| match result {
                 Ok(pair) => {
@@ -164,7 +164,7 @@ fn parse_root(table: rlua::Table) -> ViewOptions {
                         let is_fixed = capture
                             .name("is_fixed")
                             .map_or(false, |m| m.as_str().eq("f"));
-                        Some(super::entry::Metadata::new(name, size, is_fixed))
+                        Some(super::column::Column::new(name, size, is_fixed))
                     } else {
                         eprintln!("Error parsing 'rsfm.entry_format' value '{string}'");
                         None

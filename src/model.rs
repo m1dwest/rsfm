@@ -28,6 +28,10 @@ lazy_static::lazy_static! {
     };
 }
 
+const DIR_SIZE_PLACEHOLDER: &str = "<DIR>";
+const LINK_SIZE_PLACEHOLDER: &str = " --> ";
+const UNKNOWN_SIZE_PLACEHOLDER: &str = "<???>";
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 enum EntryType {
     Dir,
@@ -48,40 +52,6 @@ impl EntryType {
             EntryType::Unknown
         }
     }
-}
-
-fn get_info_string(metadata: &std::fs::Metadata) -> String {
-    if metadata.is_dir() {
-        return "<DIR>".to_string();
-    } else if metadata.is_file() {
-        let (size, postfix) = details::human_readable_size(metadata.len());
-        return format!("{} {}", size, postfix);
-    } else if metadata.is_symlink() {
-        return "->".to_string();
-    } else {
-        return "<???>".to_string();
-    }
-}
-
-fn parse_metadata(metadata: &Option<std::fs::Metadata>, string_width: u16) -> (String, Style) {
-    let (string, style) = match metadata {
-        Some(metadata) => {
-            let entry_type = EntryType::new(metadata);
-            (
-                get_info_string(metadata),
-                *ITEM_STYLES.get(&entry_type).unwrap(),
-            )
-        }
-        None => (
-            "<???>".to_string(),
-            *ITEM_STYLES.get(&EntryType::Unknown).unwrap(),
-        ),
-    };
-
-    (
-        " ".repeat(string_width as usize - string.len()) + &string,
-        style,
-    )
 }
 
 #[derive(Debug, Clone)]
@@ -182,8 +152,44 @@ pub fn get_table_rows<'a>(
     items
         .into_iter()
         .map(|item| {
-            let (info, style) = parse_metadata(&item.metadata, opt.column_right_width);
-            Row::new(vec![item.name, info]).style(style)
+            // let (info, style) = parse_metadata(&item.metadata, opt.column_right_width);
+            let style = *ITEM_STYLES.get(&item.entry_type).unwrap();
+            Row::new(generate_columns(item, &opt.columns)).style(style)
+            // Row::new(vec![item.name, info]).style(style)
+        })
+        .collect()
+}
+
+fn generate_name(item: &Item) -> String {
+    item.name.clone()
+}
+
+fn generate_size(item: &Item) -> String {
+    match &item.metadata {
+        Some(metadata) => {
+            if metadata.is_dir() {
+                String::from(DIR_SIZE_PLACEHOLDER)
+            } else if metadata.is_file() {
+                let (size, postfix) = details::human_readable_size(metadata.len());
+                format!("{} {}", size, postfix)
+            } else if metadata.is_symlink() {
+                String::from(LINK_SIZE_PLACEHOLDER)
+            } else {
+                String::from(UNKNOWN_SIZE_PLACEHOLDER)
+            }
+        }
+        None => String::from(UNKNOWN_SIZE_PLACEHOLDER),
+    }
+}
+
+fn generate_columns(item: Item, columns: &Vec<config::column::Column>) -> Vec<String> {
+    use config::column::ColumnType;
+
+    columns
+        .iter()
+        .map(|column| match column.column_type {
+            ColumnType::Name => generate_name(&item),
+            ColumnType::Size => generate_size(&item),
         })
         .collect()
 }

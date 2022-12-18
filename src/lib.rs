@@ -49,11 +49,11 @@ pub fn run() -> Result<(), io::Error> {
     // calculate sizes
     let mut sum_relative = 0u16;
     let mut sum_fixed = 0u16;
-    for metadata in &options.entry_format {
-        if metadata.is_fixed_width {
-            sum_fixed += metadata.width;
+    for column in &options.columns {
+        if column.is_fixed_width {
+            sum_fixed += column.width;
         } else {
-            sum_relative += metadata.width;
+            sum_relative += column.width;
         };
     }
     // REL * x + FIX = WIDTH
@@ -64,13 +64,13 @@ pub fn run() -> Result<(), io::Error> {
     println!("terminal_width: {terminal_width}");
     let width_unit = (terminal_width - sum_fixed) / sum_relative;
     let widths: Vec<_> = options
-        .entry_format
+        .columns
         .iter()
-        .map(|metadata| {
-            let width = if metadata.is_fixed_width {
-                metadata.width
+        .map(|column| {
+            let width = if column.is_fixed_width {
+                column.width
             } else {
-                metadata.width * width_unit
+                column.width * width_unit
             };
             tui::layout::Constraint::Length(width)
         })
