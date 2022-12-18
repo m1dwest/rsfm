@@ -1,4 +1,4 @@
-use super::{EntryMetadata, ViewOptions};
+use super::ViewOptions;
 
 static VARIABLES: phf::Map<&'static str, &'static str> = phf::phf_map! {
     "rsfm.show_hidden" => "boolean",
@@ -89,7 +89,7 @@ pub fn parse_syntax(root_key: &str, root_value: rlua::Value) -> CheckResult {
     let mut names_to_skip: Vec<&str> = Vec::new();
 
     actual_vars.iter().for_each(|var| {
-        // skip checking underlying table entries if 'table' is unexpected type
+        // skip checking underlying table entries if 'Table' is unexpected type
         if names_to_skip
             .iter()
             .find(|&&x| var.name.starts_with(x))
@@ -155,6 +155,7 @@ fn parse_root(table: rlua::Table) -> ViewOptions {
                 Ok(pair) => {
                     let string = pair.1;
                     if re.is_match(&string) {
+                        // TODO check for syntax errors
                         let capture = re.captures(&string)?;
                         let name = capture.name("name").unwrap().as_str();
                         let size = capture
@@ -163,7 +164,7 @@ fn parse_root(table: rlua::Table) -> ViewOptions {
                         let is_fixed = capture
                             .name("is_fixed")
                             .map_or(false, |m| m.as_str().eq("f"));
-                        EntryMetadata::new(name, size, is_fixed).ok()
+                        Some(super::entry::Metadata::new(name, size, is_fixed))
                     } else {
                         eprintln!("Error parsing 'rsfm.entry_format' value '{string}'");
                         None

@@ -1,4 +1,4 @@
-rsfm.show_hidden = false
+rsfm.show_hidden = true
 rsfm.entry_format = {
-    "name:5", "info:5f"
+    "name:5", "size:5f"
 }

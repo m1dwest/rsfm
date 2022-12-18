@@ -29,6 +29,9 @@ fn get_dir_entries(path: &std::path::Path) -> Vec<std::fs::DirEntry> {
 
 pub fn run() -> Result<(), io::Error> {
     let mut options = config::read_config(std::path::Path::new("config.lua"));
+
+    println!("{:?}", options);
+
     let stdout = io::stdout();
     let backend = tui::backend::CrosstermBackend::new(stdout);
     let mut terminal = tui::terminal::Terminal::new(backend)?;
@@ -43,6 +46,36 @@ pub fn run() -> Result<(), io::Error> {
     let cwd = std::path::Path::new("/home/midwest");
     let mut dir_entries = get_dir_entries(&cwd);
 
+    // calculate sizes
+    let mut sum_relative = 0u16;
+    let mut sum_fixed = 0u16;
+    for metadata in &options.entry_format {
+        if metadata.is_fixed_width {
+            sum_fixed += metadata.width;
+        } else {
+            sum_relative += metadata.width;
+        };
+    }
+    // REL * x + FIX = WIDTH
+    let terminal_width = terminal
+        .size()
+        .expect("Cannot retrieve terminal size")
+        .width;
+    println!("terminal_width: {terminal_width}");
+    let width_unit = (terminal_width - sum_fixed) / sum_relative;
+    let widths: Vec<_> = options
+        .entry_format
+        .iter()
+        .map(|metadata| {
+            let width = if metadata.is_fixed_width {
+                metadata.width
+            } else {
+                metadata.width * width_unit
+            };
+            tui::layout::Constraint::Length(width)
+        })
+        .collect();
+
     loop {
         // -- draw
         let style_selection = Style::default().fg(Color::Black).bg(Color::LightYellow);
@@ -50,17 +83,13 @@ pub fn run() -> Result<(), io::Error> {
         let mut state = TableState::default();
         state.select(Some(selected_index));
 
-        use tui::layout::Constraint;
         terminal.draw(|f| {
             let size = f.size();
             let rows = model::get_table_rows(&dir_entries, &options);
-            let widths = &[
-                Constraint::Length(options.column_left_width),
-                Constraint::Length(options.column_right_width),
-            ];
+            // let widths = &[Constraint::Length(50), Constraint::Length(10)];
             let list = Table::new(rows)
                 .block(Block::default().borders(Borders::ALL))
-                .widths(widths)
+                .widths(&widths)
                 .highlight_style(style_selection);
             f.render_stateful_widget(list, size, &mut state);
         })?;

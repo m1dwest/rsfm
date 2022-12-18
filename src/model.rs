@@ -7,7 +7,7 @@ use crate::config;
 mod details;
 
 lazy_static::lazy_static! {
-    static ref FILE_STYLES: HashMap<EntryType, Style> = {
+    static ref ITEM_STYLES: HashMap<EntryType, Style> = {
         let mut map = HashMap::new();
         map.insert(EntryType::Dir, Style::default().fg(Color::Red).add_modifier(Modifier::BOLD));
         map.insert(EntryType::File, Style::default());
@@ -18,7 +18,7 @@ lazy_static::lazy_static! {
 }
 
 lazy_static::lazy_static! {
-    static ref FILE_PRIORITY: HashMap<EntryType, u8> = {
+    static ref ITEM_PRIORITY: HashMap<EntryType, u8> = {
         let mut map = HashMap::new();
         map.insert(EntryType::File, 2);
         map.insert(EntryType::Dir, 1);
@@ -69,12 +69,12 @@ fn parse_metadata(metadata: &Option<std::fs::Metadata>, string_width: u16) -> (S
             let entry_type = EntryType::new(metadata);
             (
                 get_info_string(metadata),
-                *FILE_STYLES.get(&entry_type).unwrap(),
+                *ITEM_STYLES.get(&entry_type).unwrap(),
             )
         }
         None => (
             "<???>".to_string(),
-            *FILE_STYLES.get(&EntryType::Unknown).unwrap(),
+            *ITEM_STYLES.get(&EntryType::Unknown).unwrap(),
         ),
     };
 
@@ -91,6 +91,30 @@ struct Item {
     metadata: Option<std::fs::Metadata>,
 }
 
+impl Item {
+    fn from(entry: &std::fs::DirEntry) -> Self {
+        let name = entry.file_name().to_string_lossy().to_string();
+        let metadata = match entry.metadata() {
+            Ok(metadata) => Some(metadata),
+            Err(error) => {
+                eprintln!("{error}");
+                None
+            }
+        };
+
+        let entry_type = match metadata {
+            Some(ref metadata) => EntryType::new(&metadata),
+            None => EntryType::Unknown,
+        };
+
+        Item {
+            name,
+            entry_type,
+            metadata,
+        }
+    }
+}
+
 struct Part {
     begin: usize,
     end: usize,
@@ -104,7 +128,7 @@ fn split_into_parts(items: &Vec<Item>) -> Vec<Part> {
     let mut result: Vec<Part> = Vec::new();
 
     let mut current_type = items.first().unwrap().entry_type;
-    let mut current_priority = *FILE_PRIORITY
+    let mut current_priority = *ITEM_PRIORITY
         .get(&items.first().unwrap().entry_type)
         .unwrap();
     let mut begin = 0usize;
@@ -112,10 +136,10 @@ fn split_into_parts(items: &Vec<Item>) -> Vec<Part> {
     for (i, item) in items.iter().enumerate() {
         if current_type != item.entry_type {
             current_type = item.entry_type;
-            if current_priority != *FILE_PRIORITY.get(&item.entry_type).unwrap() {
+            if current_priority != *ITEM_PRIORITY.get(&item.entry_type).unwrap() {
                 result.push(Part { begin, end: i });
                 begin = i;
-                current_priority = *FILE_PRIORITY.get(&item.entry_type).unwrap();
+                current_priority = *ITEM_PRIORITY.get(&item.entry_type).unwrap();
             }
         }
     }
@@ -130,54 +154,25 @@ pub fn get_table_rows<'a>(
     entries: &'a Vec<std::fs::DirEntry>,
     opt: &config::ViewOptions,
 ) -> Vec<Row<'a>> {
-    let items: Vec<_> = entries
-        .iter()
-        .map(|entry| {
-            let name = entry.file_name().to_string_lossy().to_string();
-            let metadata = match entry.metadata() {
-                Ok(metadata) => Some(metadata),
-                Err(error) => {
-                    eprintln!("{error}");
-                    None
-                }
-            };
+    let items: Vec<_> = entries.iter().map(Item::from).collect();
 
-            let entry_type = match metadata {
-                Some(ref metadata) => EntryType::new(&metadata),
-                None => EntryType::Unknown,
-            };
-
-            Item {
-                name,
-                entry_type,
-                metadata,
-            }
+    let mut items: Vec<_> = items
+        .into_iter()
+        .filter(|item| match item.name.chars().nth(0) {
+            Some(c) if !opt.show_hidden && c == '.' => false,
+            _ => true,
         })
         .collect();
 
-    let mut items: Vec<_> = match opt.show_hidden {
-        false => items
-            .into_iter()
-            .filter(|item| match item.name.chars().nth(0) {
-                Some(c) if c == '.' => false,
-                _ => true,
-            })
-            .collect(),
-        true => items,
-    };
-
     items.sort_by(|a, b| {
-        let get_priority = |item: &Item| -> u8 { *FILE_PRIORITY.get(&item.entry_type).unwrap() };
+        let get_priority = |item: &Item| -> u8 { *ITEM_PRIORITY.get(&item.entry_type).unwrap() };
         get_priority(&a)
             .partial_cmp(&get_priority(&b))
             .unwrap_or(std::cmp::Ordering::Less)
     });
 
-    let items_parts = split_into_parts(&items);
-
-    items_parts.into_iter().for_each(|part| {
-        let slice = &mut items[part.begin..part.end];
-        slice.sort_by(|a, b| {
+    split_into_parts(&items).into_iter().for_each(|part| {
+        items[part.begin..part.end].sort_by(|a, b| {
             a.name
                 .partial_cmp(&b.name)
                 .unwrap_or(std::cmp::Ordering::Less)
