@@ -154,7 +154,7 @@ pub fn get_table_rows<'a>(
         .map(|item| {
             // let (info, style) = parse_metadata(&item.metadata, opt.column_right_width);
             let style = *ITEM_STYLES.get(&item.entry_type).unwrap();
-            Row::new(generate_columns(item, &opt.columns)).style(style)
+            Row::new(generate_columns(item, &opt.entry_format)).style(style)
             // Row::new(vec![item.name, info]).style(style)
         })
         .collect()

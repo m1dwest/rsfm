@@ -1,15 +1,15 @@
 pub mod parser;
 
 pub mod column {
-    #[derive(Debug)]
+    #[derive(Debug, PartialEq)]
     pub enum ColumnType {
         Name,
         Size,
     }
 
     impl ColumnType {
-        fn from(typename: &str) -> Result<Self, ()> {
-            match typename {
+        pub fn from(typename: &str) -> Result<Self, ()> {
+            match typename.to_lowercase().as_str() {
                 "name" => Ok(ColumnType::Name),
                 "size" => Ok(ColumnType::Size),
                 _ => Err(()),
@@ -17,7 +17,7 @@ pub mod column {
         }
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, PartialEq)]
     pub struct Column {
         pub column_type: ColumnType,
         pub width: u16,
@@ -39,18 +39,14 @@ pub mod column {
 #[derive(Debug)]
 pub struct ViewOptions {
     pub show_hidden: bool,
-    pub columns: Vec<column::Column>,
-    pub column_left_width: u16,
-    pub column_right_width: u16,
+    pub entry_format: Vec<column::Column>,
 }
 
 impl ViewOptions {
     pub fn default() -> ViewOptions {
         ViewOptions {
             show_hidden: false,
-            columns: vec![column::Column::new("name", 1, false)],
-            column_left_width: 50,
-            column_right_width: 10,
+            entry_format: Vec::new(),
         }
     }
 }

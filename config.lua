@@ -2,12 +2,12 @@ rsfm.show_hidden = false
 rsfm.entry_format = {
     {
         type = "name",
-        size = 5,
-        is_fixed_size = false,
+        width = 0,
+        is_fixed_width = false,
     },
     {
         type = "size",
-        size = 5,
-        is_fixed_size = true,
+        width = 5,
+        is_fixed_width = true,
     }
 }

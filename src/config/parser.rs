@@ -1,12 +1,12 @@
-use super::ViewOptions;
+use super::{column, ViewOptions};
 
 static VARIABLES: phf::Map<&'static str, &'static str> = phf::phf_map! {
     "rsfm.show_hidden" => "boolean",
     "rsfm.entry_format" => "table",
     "rsfm.entry_format.{}" => "table",
     "rsfm.entry_format.{}.type" => "string",
-    "rsfm.entry_format.{}.size" => "integer",
-    "rsfm.entry_format.{}.is_fixed_size" => "boolean",
+    "rsfm.entry_format.{}.width" => "integer",
+    "rsfm.entry_format.{}.is_fixed_width" => "boolean",
 };
 
 const MAX_SIMILARITY_DISTANCE: usize = 3;
@@ -154,44 +154,89 @@ pub fn parse_syntax(root_key: &str, root_value: rlua::Value) -> CheckResult {
     }
 }
 
+fn parse_show_hidden(table: &rlua::Table, default: bool) -> bool {
+    if let Ok(value) = table.get::<_, bool>("show_hidden") {
+        value
+    } else {
+        default
+    }
+}
+
+fn parse_entry_format(table: &rlua::Table) -> Vec<column::Column> {
+    if let Ok(entry_format) = table.get::<_, rlua::Table>("entry_format") {
+        entry_format
+            .pairs()
+            .filter_map(
+                |result: Result<(u16, rlua::Table), rlua::Error>| match result {
+                    Ok(pair) => {
+                        let (index, column_table) = pair;
+
+                        let typename = match column_table.get::<_, String>("type") {
+                            Ok(typename) => typename,
+                            Err(error) => {
+                                eprintln!(
+                                    "Error parsing 'rsfm.entry_format.{index}.type': {error}"
+                                );
+                                return None;
+                            }
+                        };
+
+                        let column_type = match column::ColumnType::from(&typename) {
+                            Ok(column_type) => column_type,
+                            Err(()) => {
+                                eprintln!("Unknown column type name: {typename}");
+                                return None;
+                            }
+                        };
+
+                        let width = match column_table.get::<_, u16>("width") {
+                            Ok(width) => width,
+                            Err(error) => {
+                                eprintln!(
+                                    "Error parsing 'rsfm.entry_format.{index}.width': {error}"
+                                );
+                                return None;
+                            }
+                        };
+
+                        if width == 0 {
+                            eprintln!(
+                                "Error parsing 'rsfm.entry_format.{index}.width': value can not be 0"
+                            );
+                            return None;
+                        }
+
+                        let is_fixed_width = match column_table.contains_key("is_fixed_width") {
+                            Ok(contains) if contains != false => {
+                                column_table.get::<_, bool>("is_fixed_width").unwrap()
+                            },
+                            _ => {
+                                eprintln!(
+                                    "Error parsing 'rsfm.entry_format.{index}.is_fixed_width': value not found"
+                                );
+                                return None;
+                            }
+                        };
+
+                        Some(column::Column { column_type, width, is_fixed_width})
+                    }
+                    Err(error) => {
+                        eprintln!("Error parsing 'rsfm.entry_format': {error}");
+                        None
+                    }
+                },
+            )
+            .collect()
+    } else {
+        Vec::new()
+    }
+}
+
 fn parse_root(table: rlua::Table) -> ViewOptions {
     let mut options = ViewOptions::default();
 
-    if let Ok(show_hidden) = table.get::<_, bool>("show_hidden") {
-        options.show_hidden = show_hidden;
-    }
-
-    if let Ok(entry_format) = table.get::<_, rlua::Table>("entry_format") {
-        let re = regex::Regex::new(r"^(?P<name>\w+)(?::(?P<size>\d+)(?P<is_fixed>\w)?)?$").unwrap();
-
-        options.columns = entry_format
-            .pairs()
-            .filter_map(|result: Result<(u16, String), rlua::Error>| match result {
-                Ok(pair) => {
-                    let string = pair.1;
-                    if re.is_match(&string) {
-                        // TODO check for syntax errors
-                        let capture = re.captures(&string)?;
-                        let name = capture.name("name").unwrap().as_str();
-                        let size = capture
-                            .name("size")
-                            .map_or(1_u16, |m| m.as_str().parse::<u16>().unwrap());
-                        let is_fixed = capture
-                            .name("is_fixed")
-                            .map_or(false, |m| m.as_str().eq("f"));
-                        Some(super::column::Column::new(name, size, is_fixed))
-                    } else {
-                        eprintln!("Error parsing 'rsfm.entry_format' value '{string}'");
-                        None
-                    }
-                }
-                Err(error) => {
-                    eprintln!("Error parsing 'rsfm.entry_format': {error}");
-                    None
-                }
-            })
-            .collect();
-    }
+    options.show_hidden = parse_show_hidden(&table, options.show_hidden);
+    options.entry_format = parse_entry_format(&table);
 
     options
 }

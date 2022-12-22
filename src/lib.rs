@@ -7,7 +7,9 @@ mod config;
 mod model;
 
 // TODO
+pub use config::column;
 pub use config::parser;
+pub use config::ViewOptions;
 
 fn get_dir_entries(path: &std::path::Path) -> Vec<std::fs::DirEntry> {
     match std::fs::read_dir(path) {
@@ -49,7 +51,7 @@ pub fn run() -> Result<(), io::Error> {
     // calculate sizes
     let mut sum_relative = 0u16;
     let mut sum_fixed = 0u16;
-    for column in &options.columns {
+    for column in &options.entry_format {
         if column.is_fixed_width {
             sum_fixed += column.width;
         } else {
@@ -63,8 +65,9 @@ pub fn run() -> Result<(), io::Error> {
         .width;
     println!("terminal_width: {terminal_width}");
     let width_unit = (terminal_width - sum_fixed) / sum_relative;
+    // div by 0, negative numbers
     let widths: Vec<_> = options
-        .columns
+        .entry_format
         .iter()
         .map(|column| {
             let width = if column.is_fixed_width {

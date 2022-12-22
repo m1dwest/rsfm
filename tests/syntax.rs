@@ -1,6 +1,8 @@
+use rsfm::column;
 use rsfm::parser::CheckResult;
+use rsfm::ViewOptions;
 
-fn check(source: &str) -> CheckResult {
+fn parse_syntax(source: &str) -> CheckResult {
     rlua::Lua::new().context(|ctx| -> CheckResult {
         let rsfm = ctx.create_table().unwrap();
         let globals = ctx.globals();
@@ -14,8 +16,22 @@ fn check(source: &str) -> CheckResult {
     })
 }
 
+fn parse_values(source: &str) -> ViewOptions {
+    rlua::Lua::new().context(|ctx| -> ViewOptions {
+        let rsfm = ctx.create_table().unwrap();
+        let globals = ctx.globals();
+
+        globals.set("rsfm", rsfm).unwrap();
+
+        ctx.load(source).exec().unwrap();
+
+        let rsfm = globals.get::<_, rlua::Value>("rsfm").unwrap();
+        rsfm::parser::parse_values(rsfm).unwrap()
+    })
+}
+
 #[test]
-fn correct() {
+fn correct_syntax() {
     let config = r#"
     var = 4
 
@@ -23,18 +39,18 @@ fn correct() {
     rsfm.entry_format = {
         {
             type = "name",
-            size = 5,
-            is_fixed_size = false,
+            width = 5,
+            is_fixed_width = false,
         },
         {
             type = "size",
-            size = 5,
-            is_fixed_size = true,
+            width = 5,
+            is_fixed_width = true,
         }
     }
     "#;
 
-    assert!(check(&config).is_ok());
+    assert!(parse_syntax(&config).is_ok());
 }
 
 #[test]
@@ -43,7 +59,7 @@ fn no_rsfm() {
     var = 4
     "#;
 
-    assert!(check(&config).is_ok());
+    assert!(parse_syntax(&config).is_ok());
 }
 
 #[test]
@@ -59,7 +75,7 @@ fn unexpected_type() {
     }
     "#;
 
-    let result = check(&config);
+    let result = parse_syntax(&config);
     assert!(result.is_err());
 
     let result = result.unwrap_err();
@@ -92,7 +108,7 @@ fn unknown_variable() {
     rsfm.var = true
     "#;
 
-    let result = check(&config);
+    let result = parse_syntax(&config);
     assert!(result.is_err());
 
     let result = result.unwrap_err();
@@ -127,7 +143,7 @@ fn unknown_variable() {
 }
 
 #[test]
-fn unknown_variable_in_table_1() {
+fn unknown_variable_in_table() {
     let config = r#"
     rsfm.entry_format = {
         {
@@ -136,7 +152,7 @@ fn unknown_variable_in_table_1() {
     }
     "#;
 
-    let result = check(&config);
+    let result = parse_syntax(&config);
     assert!(result.is_err());
 
     let result = result.unwrap_err();
@@ -154,7 +170,7 @@ fn unknown_variable_in_table_1() {
     }
     "#;
 
-    let result = check(&config);
+    let result = parse_syntax(&config);
     assert!(result.is_err());
 
     let result = result.unwrap_err();
@@ -163,4 +179,93 @@ fn unknown_variable_in_table_1() {
         result[0],
         "Unknown variable 'rsfm.entry_format.{}.hype'. Did you mean 'rsfm.entry_format.{}.type'?"
     );
+}
+
+#[test]
+fn correct_values() {
+    let config = r#"
+    rsfm.show_hidden = false
+    rsfm.entry_format = {
+        {
+            type = "name",
+            width = 5,
+            is_fixed_width = false,
+        },
+        {
+            type = "SiZe",
+            width = 50,
+            is_fixed_width = true,
+        }
+    }
+    "#;
+
+    let view_options = parse_values(&config);
+    assert_eq!(view_options.show_hidden, false);
+    assert_eq!(view_options.entry_format.len(), 2);
+
+    let expected_0 = column::Column {
+        column_type: column::ColumnType::from("name").unwrap(),
+        width: 5,
+        is_fixed_width: false,
+    };
+    let expected_1 = column::Column {
+        column_type: column::ColumnType::from("size").unwrap(),
+        width: 50,
+        is_fixed_width: true,
+    };
+    assert_eq!(view_options.entry_format[0], expected_0);
+    assert_eq!(view_options.entry_format[1], expected_1);
+}
+
+#[test]
+fn entry_format_incomplete() {
+    let config = r#"
+    rsfm.show_hidden = false
+    rsfm.entry_format = {
+        {
+            type = "name",
+            width = 5,
+        }
+    }
+    "#;
+
+    let view_options = parse_values(&config);
+    assert_eq!(view_options.show_hidden, false);
+    assert_eq!(view_options.entry_format.len(), 0);
+}
+
+#[test]
+fn entry_format_zero_width() {
+    let config = r#"
+    rsfm.show_hidden = false
+    rsfm.entry_format = {
+        {
+            type = "name",
+            width = 0,
+            is_fixed_width = false,
+        }
+    }
+    "#;
+
+    let view_options = parse_values(&config);
+    assert_eq!(view_options.show_hidden, false);
+    assert_eq!(view_options.entry_format.len(), 0);
+}
+
+#[test]
+fn entry_format_wrong_type() {
+    let config = r#"
+    rsfm.show_hidden = false
+    rsfm.entry_format = {
+        {
+            type = "type",
+            width = 10,
+            is_fixed_width = false,
+        }
+    }
+    "#;
+
+    let view_options = parse_values(&config);
+    assert_eq!(view_options.show_hidden, false);
+    assert_eq!(view_options.entry_format.len(), 0);
 }
