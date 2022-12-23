@@ -1,3 +1,4 @@
+use tui::layout::Constraint;
 use tui::style::*;
 use tui::widgets::*;
 
@@ -120,16 +121,22 @@ fn split_into_parts(items: &Vec<Item>) -> Vec<Part> {
     result
 }
 
-pub fn get_table_rows<'a>(
+pub struct TableData<'a> {
+    pub rows: Vec<Row<'a>>,
+    pub widths: Vec<Constraint>,
+}
+
+pub fn get_table_data<'a>(
     entries: &'a Vec<std::fs::DirEntry>,
-    opt: &config::ViewOptions,
-) -> Vec<Row<'a>> {
+    options: &config::ViewOptions,
+    terminal_width: u16,
+) -> TableData<'a> {
     let items: Vec<_> = entries.iter().map(Item::from).collect();
 
     let mut items: Vec<_> = items
         .into_iter()
         .filter(|item| match item.name.chars().nth(0) {
-            Some(c) if !opt.show_hidden && c == '.' => false,
+            Some(c) if !options.show_hidden && c == '.' => false,
             _ => true,
         })
         .collect();
@@ -149,15 +156,23 @@ pub fn get_table_rows<'a>(
         });
     });
 
-    items
+    let widths = generate_widths(&options, terminal_width);
+
+    let rows = items
         .into_iter()
         .map(|item| {
-            // let (info, style) = parse_metadata(&item.metadata, opt.column_right_width);
             let style = *ITEM_STYLES.get(&item.entry_type).unwrap();
-            Row::new(generate_columns(item, &opt.entry_format)).style(style)
-            // Row::new(vec![item.name, info]).style(style)
+            Row::new(generate_columns(item, &options.entry_format, &widths)).style(style)
         })
-        .collect()
+        .collect();
+
+    TableData {
+        rows,
+        widths: widths
+            .into_iter()
+            .map(|width| Constraint::Length(width))
+            .collect(),
+    }
 }
 
 fn generate_name(item: &Item) -> String {
@@ -182,14 +197,85 @@ fn generate_size(item: &Item) -> String {
     }
 }
 
-fn generate_columns(item: Item, columns: &Vec<config::column::Column>) -> Vec<String> {
+fn generate_widths(options: &config::ViewOptions, total_width: u16) -> Vec<u16> {
+    const BORDER_WIDTH: u16 = 1;
+
+    let terminal_width = {
+        let column_count = options.entry_format.len() as u16;
+        let occupied_width = 2 * BORDER_WIDTH
+            + if column_count > 1 {
+                column_count - 1
+            } else {
+                0
+            };
+        if total_width < occupied_width {
+            0
+        } else {
+            total_width - occupied_width
+        }
+    };
+
+    let mut sum_relative = 0u16;
+    let mut sum_fixed = 0u16;
+    for column in &options.entry_format {
+        if column.is_fixed_width {
+            sum_fixed += column.width;
+        } else {
+            sum_relative += column.width;
+        };
+    }
+
+    let width_unit = if sum_relative == 0 || sum_fixed >= terminal_width {
+        0.0
+    } else {
+        (terminal_width - sum_fixed) as f64 / sum_relative as f64
+    };
+
+    options
+        .entry_format
+        .iter()
+        .map(|column| {
+            if column.is_fixed_width {
+                column.width
+            } else {
+                (column.width as f64 * width_unit) as u16
+            }
+        })
+        .collect()
+}
+
+fn generate_columns(
+    item: Item,
+    columns: &Vec<config::column::Column>,
+    widths: &Vec<u16>,
+) -> Vec<String> {
+    use config::column;
     use config::column::ColumnType;
+
+    use pad::PadStr;
+
+    const PAD_CHAR: char = ' ';
+
+    let to_pad_alignment = |alignment: &column::Alignment| match alignment {
+        column::Alignment::Left => pad::Alignment::Left,
+        column::Alignment::Center => pad::Alignment::Middle,
+        column::Alignment::Right => pad::Alignment::Right,
+    };
 
     columns
         .iter()
-        .map(|column| match column.column_type {
-            ColumnType::Name => generate_name(&item),
-            ColumnType::Size => generate_size(&item),
+        .zip(widths)
+        .map(|(column, width)| {
+            let alignment = to_pad_alignment(&column.alignment);
+
+            match column.column_type {
+                ColumnType::Name => {
+                    generate_name(&item).pad(*width as usize, PAD_CHAR, alignment, true)
+                }
+                ColumnType::Size => {
+                    generate_size(&item).pad(*width as usize, PAD_CHAR, alignment, true)
+                }
+            }
         })
         .collect()
 }
@@ -202,7 +288,6 @@ mod tests {
         {
             let mut temp = Vec::new();
             $(
-                // temp.push($x);
                 temp.push(Item{
                     name: String::new(),
                     entry_type: $x,

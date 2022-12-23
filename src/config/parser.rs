@@ -7,6 +7,7 @@ static VARIABLES: phf::Map<&'static str, &'static str> = phf::phf_map! {
     "rsfm.entry_format.{}.type" => "string",
     "rsfm.entry_format.{}.width" => "integer",
     "rsfm.entry_format.{}.is_fixed_width" => "boolean",
+    "rsfm.entry_format.{}.alignment" => "string",
 };
 
 const MAX_SIMILARITY_DISTANCE: usize = 3;
@@ -64,24 +65,6 @@ where
         None
     };
 }
-
-// fn matches_array(var: &VarDesc) -> bool {
-//     let (table, inner) = match var.name.rsplit_once('.') {
-//         Some(tuple) => tuple,
-//         None => return false,
-//     };
-
-//     let table_type = VARIABLES.get(&table);
-
-//     if table_type.is_none() || (*table_type.unwrap()).ne("table") || inner.parse::<u16>().is_err() {
-//         false
-//     } else {
-//         match VARIABLES.get(&(table.to_owned() + "{}")) {
-//             Some(inner_type) => (*inner_type).eq(var.type_name),
-//             None => false,
-//         }
-//     }
-// }
 
 fn replace_array_index(var: &str) -> String {
     use itertools::Itertools;
@@ -211,7 +194,25 @@ fn parse_entry_format(table: &rlua::Table) -> Vec<column::Column> {
                             }
                         };
 
-                        Some(column::Column { column_type, width, is_fixed_width})
+                        let alignment = match column_table.get::<_, String>("alignment") {
+                            Ok(typename) => typename,
+                            Err(error) => {
+                                eprintln!(
+                                    "Error parsing 'rsfm.entry_format.{index}.alignment': {error}"
+                                );
+                                return None;
+                            }
+                        };
+
+                        let alignment = match column::Alignment::from(&alignment) {
+                            Ok(alignment) => alignment,
+                            Err(()) => {
+                                eprintln!("Unknown algnment type: {alignment}");
+                                return None;
+                            }
+                        };
+
+                        Some(column::Column { column_type, width, is_fixed_width, alignment})
                     }
                     Err(error) => {
                         eprintln!("Error parsing 'rsfm.entry_format': {error}");

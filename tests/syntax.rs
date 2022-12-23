@@ -190,11 +190,13 @@ fn correct_values() {
             type = "name",
             width = 5,
             is_fixed_width = false,
+            alignment = "left",
         },
         {
             type = "SiZe",
             width = 50,
             is_fixed_width = true,
+            alignment = "right",
         }
     }
     "#;
@@ -207,11 +209,13 @@ fn correct_values() {
         column_type: column::ColumnType::from("name").unwrap(),
         width: 5,
         is_fixed_width: false,
+        alignment: column::Alignment::Left,
     };
     let expected_1 = column::Column {
         column_type: column::ColumnType::from("size").unwrap(),
         width: 50,
         is_fixed_width: true,
+        alignment: column::Alignment::Right,
     };
     assert_eq!(view_options.entry_format[0], expected_0);
     assert_eq!(view_options.entry_format[1], expected_1);

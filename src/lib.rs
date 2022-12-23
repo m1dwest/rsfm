@@ -48,60 +48,6 @@ pub fn run() -> Result<(), io::Error> {
     let cwd = std::path::Path::new("/home/midwest");
     let mut dir_entries = get_dir_entries(&cwd);
 
-    // calculate sizes
-    let mut sum_relative = 0u16;
-    let mut sum_fixed = 0u16;
-    for column in &options.entry_format {
-        if column.is_fixed_width {
-            sum_fixed += column.width;
-        } else {
-            sum_relative += column.width;
-        };
-    }
-
-    let terminal_width = {
-        const BORDER_WIDTH: u16 = 1;
-
-        let width = terminal
-            .size()
-            .expect("Cannot retrieve terminal size")
-            .width;
-        let column_count = options.entry_format.len() as u16;
-        let occupied_width = 2 * BORDER_WIDTH
-            + if column_count > 1 {
-                column_count - 1
-            } else {
-                0
-            };
-        if width < occupied_width {
-            0
-        } else {
-            width - occupied_width
-        }
-    };
-
-    // println!(
-    //     "terminal_width: {terminal_width}, sum_fixed: {sum_fixed}, sum_relative: {sum_relative}"
-    // );
-    let width_unit = if sum_relative == 0 || sum_fixed >= terminal_width {
-        0.0
-    } else {
-        (terminal_width - sum_fixed) as f64 / sum_relative as f64
-    };
-
-    let widths: Vec<_> = options
-        .entry_format
-        .iter()
-        .map(|column| {
-            let width = if column.is_fixed_width {
-                column.width
-            } else {
-                (column.width as f64 * width_unit) as u16
-            };
-            tui::layout::Constraint::Length(width)
-        })
-        .collect();
-
     loop {
         // -- draw
         let style_selection = Style::default().fg(Color::Black).bg(Color::LightYellow);
@@ -109,13 +55,16 @@ pub fn run() -> Result<(), io::Error> {
         let mut state = TableState::default();
         state.select(Some(selected_index));
 
+        let terminal_width = terminal
+            .size()
+            .expect("Cannot retrieve terminal size")
+            .width;
         terminal.draw(|f| {
             let size = f.size();
-            let rows = model::get_table_rows(&dir_entries, &options);
-            // let widths = &[Constraint::Length(50), Constraint::Length(10)];
-            let list = Table::new(rows)
+            let table_data = model::get_table_data(&dir_entries, &options, terminal_width);
+            let list = Table::new(table_data.rows)
                 .block(Block::default().borders(Borders::ALL))
-                .widths(&widths)
+                .widths(&table_data.widths)
                 .highlight_style(style_selection);
             f.render_stateful_widget(list, size, &mut state);
         })?;

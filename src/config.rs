@@ -18,10 +18,29 @@ pub mod column {
     }
 
     #[derive(Debug, PartialEq)]
+    pub enum Alignment {
+        Left,
+        Center,
+        Right,
+    }
+
+    impl Alignment {
+        pub fn from(typename: &str) -> Result<Self, ()> {
+            match typename.to_lowercase().as_str() {
+                "left" => Ok(Alignment::Left),
+                "center" => Ok(Alignment::Center),
+                "right" => Ok(Alignment::Right),
+                _ => Err(()),
+            }
+        }
+    }
+
+    #[derive(Debug, PartialEq)]
     pub struct Column {
         pub column_type: ColumnType,
         pub width: u16,
         pub is_fixed_width: bool,
+        pub alignment: Alignment,
     }
 
     impl Column {
@@ -31,6 +50,7 @@ pub mod column {
                     .unwrap_or_else(|()| panic!("Unknown column type: {column_typename}")),
                 width,
                 is_fixed_width,
+                alignment: Alignment::Left,
             }
         }
     }
