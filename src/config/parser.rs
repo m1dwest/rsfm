@@ -199,13 +199,6 @@ fn parse_entry_format(table: &rlua::Table) -> Vec<column::Column> {
                             }
                         };
 
-                        if width == 0 {
-                            eprintln!(
-                                "Error parsing 'rsfm.entry_format.{index}.width': value can not be 0"
-                            );
-                            return None;
-                        }
-
                         let is_fixed_width = match column_table.contains_key("is_fixed_width") {
                             Ok(contains) if contains != false => {
                                 column_table.get::<_, bool>("is_fixed_width").unwrap()

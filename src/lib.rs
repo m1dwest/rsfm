@@ -58,14 +58,37 @@ pub fn run() -> Result<(), io::Error> {
             sum_relative += column.width;
         };
     }
-    // REL * x + FIX = WIDTH
-    let terminal_width = terminal
-        .size()
-        .expect("Cannot retrieve terminal size")
-        .width;
-    println!("terminal_width: {terminal_width}");
-    let width_unit = (terminal_width - sum_fixed) / sum_relative;
-    // div by 0, negative numbers
+
+    let terminal_width = {
+        const BORDER_WIDTH: u16 = 1;
+
+        let width = terminal
+            .size()
+            .expect("Cannot retrieve terminal size")
+            .width;
+        let column_count = options.entry_format.len() as u16;
+        let occupied_width = 2 * BORDER_WIDTH
+            + if column_count > 1 {
+                column_count - 1
+            } else {
+                0
+            };
+        if width < occupied_width {
+            0
+        } else {
+            width - occupied_width
+        }
+    };
+
+    // println!(
+    //     "terminal_width: {terminal_width}, sum_fixed: {sum_fixed}, sum_relative: {sum_relative}"
+    // );
+    let width_unit = if sum_relative == 0 || sum_fixed >= terminal_width {
+        0.0
+    } else {
+        (terminal_width - sum_fixed) as f64 / sum_relative as f64
+    };
+
     let widths: Vec<_> = options
         .entry_format
         .iter()
@@ -73,7 +96,7 @@ pub fn run() -> Result<(), io::Error> {
             let width = if column.is_fixed_width {
                 column.width
             } else {
-                column.width * width_unit
+                (column.width as f64 * width_unit) as u16
             };
             tui::layout::Constraint::Length(width)
         })

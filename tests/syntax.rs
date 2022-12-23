@@ -235,24 +235,6 @@ fn entry_format_incomplete() {
 }
 
 #[test]
-fn entry_format_zero_width() {
-    let config = r#"
-    rsfm.show_hidden = false
-    rsfm.entry_format = {
-        {
-            type = "name",
-            width = 0,
-            is_fixed_width = false,
-        }
-    }
-    "#;
-
-    let view_options = parse_values(&config);
-    assert_eq!(view_options.show_hidden, false);
-    assert_eq!(view_options.entry_format.len(), 0);
-}
-
-#[test]
 fn entry_format_wrong_type() {
     let config = r#"
     rsfm.show_hidden = false
