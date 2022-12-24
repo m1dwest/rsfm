@@ -7,8 +7,14 @@ rsfm.entry_format = {
         alignment = "left",
     },
     {
-        type = "size",
+        type = "permissions",
         width = 20,
+        is_fixed_width = true,
+        alignment = "right",
+    },
+    {
+        type = "size",
+        width = 10,
         is_fixed_width = true,
         alignment = "right",
     }

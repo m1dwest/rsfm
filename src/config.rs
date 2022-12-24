@@ -5,6 +5,7 @@ pub mod column {
     pub enum ColumnType {
         Name,
         Size,
+        Permissions,
     }
 
     impl ColumnType {
@@ -12,6 +13,7 @@ pub mod column {
             match typename.to_lowercase().as_str() {
                 "name" => Ok(ColumnType::Name),
                 "size" => Ok(ColumnType::Size),
+                "permissions" => Ok(ColumnType::Permissions),
                 _ => Err(()),
             }
         }

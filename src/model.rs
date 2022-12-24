@@ -197,6 +197,15 @@ fn generate_size(item: &Item) -> String {
     }
 }
 
+fn generate_permissions(item: &Item) -> String {
+    use std::os::unix::fs::PermissionsExt;
+
+    match &item.metadata {
+        Some(metadata) => strmode::strmode(metadata.permissions().mode()),
+        None => String::new(),
+    }
+}
+
 fn generate_widths(options: &config::ViewOptions, total_width: u16) -> Vec<u16> {
     const BORDER_WIDTH: u16 = 1;
 
@@ -268,13 +277,14 @@ fn generate_columns(
         .map(|(column, width)| {
             let alignment = to_pad_alignment(&column.alignment);
 
+            let pad = |string: String| -> String {
+                string.pad(*width as usize, PAD_CHAR, alignment, true)
+            };
+
             match column.column_type {
-                ColumnType::Name => {
-                    generate_name(&item).pad(*width as usize, PAD_CHAR, alignment, true)
-                }
-                ColumnType::Size => {
-                    generate_size(&item).pad(*width as usize, PAD_CHAR, alignment, true)
-                }
+                ColumnType::Name => pad(generate_name(&item)),
+                ColumnType::Size => pad(generate_size(&item)),
+                ColumnType::Permissions => pad(generate_permissions(&item)),
             }
         })
         .collect()
